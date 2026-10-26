@@ -1,0 +1,69 @@
+{
+  "name": "dsh-folder-sidebar",
+  "version": "0.17.0",
+  "type": "module",
+  "description": "Folder-style sidebar for DeepSeek Harness: workspaces read as folders, and clicking one enters its session list instead of scrolling every workspace at once. · DSH 文件夹侧栏：工作区即文件夹，点进去只看该工作区的会话。",
+  "license": "MIT",
+  "author": "Aliboder",
+  "homepage": "https://github.com/Aliboder/dsh-folder-sidebar#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Aliboder/dsh-folder-sidebar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Aliboder/dsh-folder-sidebar/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "cordis",
+    "sidebar",
+    "workspace",
+    "sessions"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-0 <0.3.0-0"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "node test/smoke.test.mjs && node test/projection.test.mjs && node test/logic.test.mjs",
+    "check": "node --check index.js && node --check client.js",
+    "pack:check": "npm pack --dry-run"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  }
+}

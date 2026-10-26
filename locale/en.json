@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Folder Sidebar",
+    "description": "Workspaces read as folders: click one to enter its session list instead of scrolling every workspace's sessions at once."
+  }
+}

@@ -1,0 +1,4 @@
+- insert:
+    - id: folder-sidebar
+      name: dsh-folder-sidebar
+      config: {}
