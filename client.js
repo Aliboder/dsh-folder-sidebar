@@ -202,6 +202,21 @@ function baseName(path) {
 }
 
 /**
+ * How far a title must travel to show its tail, or 0 when it already fits.
+ * A couple of pixels of rounding should not start a marquee.
+ */
+function marqueeShiftOf(scrollWidth, clientWidth) {
+  if (!Number.isFinite(scrollWidth) || !Number.isFinite(clientWidth)) return 0
+  const shift = Math.round(scrollWidth - clientWidth)
+  return shift > 2 ? shift : 0
+}
+
+/** Longer titles scroll slower, so the reading speed stays roughly even. */
+function marqueeDurationOf(shift) {
+  return Math.min(14000, Math.max(2200, Math.round(shift * 26)))
+}
+
+/**
  * Web Client half of dsh-folder-sidebar.
  *
  * Replaces the sidebar's `sidebar.workspaces` region (shipped browser:
@@ -413,6 +428,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
 .dfs-row.is-current{background:var(--dsw-alias-bg-layer-1)}
 .dfs-row.is-current .dfs-title{font-weight:600}
 .dfs-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dfs-titleText{display:inline-block;white-space:nowrap;will-change:transform}
+.dfs-title.is-marquee{text-overflow:clip}
+.dfs-title.is-marquee .dfs-titleText,
+.dfs-crumbName.is-marquee .dfs-titleText{animation:dfs-title-marquee var(--dfs-marquee-duration,4s) ease-in-out infinite alternate}
+@keyframes dfs-title-marquee{0%,10%{transform:translateX(0)}90%,100%{transform:translateX(var(--dfs-marquee-shift,0))}}
+@media (prefers-reduced-motion: reduce){.dfs-title.is-marquee .dfs-titleText,.dfs-crumbName.is-marquee .dfs-titleText{animation:none}}
 .dfs-snippet{flex:1 1 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:var(--dsw-alias-label-secondary)}
 .dfs-time{flex:none;font-size:11px;font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary)}
 .dfs-status{display:inline-flex;align-items:center;justify-content:center;flex:none;width:18px;height:18px}
@@ -619,6 +640,17 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
         h('path', { key: 'bar', d: 'M8 4.29199V9.79199', stroke: 'currentColor' }),
         h('path', { key: 'dot', d: 'M8 10.708V11.708', stroke: 'currentColor' }),
       ], { size: 14 })
+    }
+
+    /**
+     * One title line: the outer span clips, the inner span scrolls on hover.
+     * The marquee only starts for text that does not fit, so short names stay
+     * still and keep their ellipsis when narrowed.
+     */
+    function Title(props) {
+      const className = props.className ?? 'dfs-title'
+      return h('span', { className, title: props.title ?? props.text },
+        h('span', { className: 'dfs-titleText' }, props.text))
     }
 
     class RenderBoundary extends React.Component {
@@ -1104,6 +1136,32 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             if (hoverTimer.current !== undefined) clearTimeout(hoverTimer.current)
           }, [])
 
+          /** Reveal a clipped title by scrolling it while the row is hovered. */
+          const startMarquee = (event) => {
+            const row = event.currentTarget
+            if (row === null || typeof row.querySelector !== 'function') return
+            const text = row.querySelector('.dfs-titleText')
+            const box = text === null ? null : text.parentElement
+            if (text === null || box === null) return
+            const shift = marqueeShiftOf(text.scrollWidth, box.clientWidth)
+            if (shift === 0) return
+            text.style.setProperty('--dfs-marquee-shift', `-${shift}px`)
+            text.style.setProperty('--dfs-marquee-duration', `${marqueeDurationOf(shift)}ms`)
+            box.classList.add('is-marquee')
+          }
+
+          const stopMarquee = (event) => {
+            const row = event.currentTarget
+            if (row === null || typeof row.querySelector !== 'function') return
+            const text = row.querySelector('.dfs-titleText')
+            const box = text === null ? null : text.parentElement
+            if (text === null || box === null) return
+            box.classList.remove('is-marquee')
+            text.style.removeProperty('--dfs-marquee-shift')
+            text.style.removeProperty('--dfs-marquee-duration')
+          }
+
+
           React.useEffect(() => {
             if (hoverFor === null) return undefined
             const onScroll = () => setHoverFor(null)
@@ -1374,10 +1432,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             const resultRows = hits.slice(0, 30).map((hit) => h('div', { key: hit.sessionId, className: 'dfs-rowWrap' },
               h('div', {
                 className: 'dfs-row', role: 'button', tabIndex: 0,
+                onMouseEnter: startMarquee,
+                onMouseLeave: stopMarquee,
                 onClick: () => openSession(hit.sessionId),
                 onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openSession(hit.sessionId) } },
               },
-              h('span', { className: 'dfs-title' }, hit.title),
+              h(Title, { text: hit.title }),
               h('span', { className: 'dfs-time' }, baseName(hit.workspace.path) || t('group.ungrouped')),
               hit.snippet === undefined ? null : h('span', { className: 'dfs-snippet' }, `${t('search.content')}: ${hit.snippet}`))))
             body.push(topBar())
@@ -1598,14 +1658,17 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
                   title: typeof workspace.path === 'string' && workspace.path !== '' ? workspace.path : name,
                   onClick: () => { if (!renaming) setOpenId(workspace.workspaceId) },
                   onContextMenu: contextMenuHandler(menuKey, folderMenu),
-                  onMouseEnter: (event) => scheduleHover(menuKey, folderStatusRows(workspace), event),
-                  onMouseLeave: cancelHover,
+                  onMouseEnter: (event) => {
+                    startMarquee(event)
+                    scheduleHover(menuKey, folderStatusRows(workspace), event)
+                  },
+                  onMouseLeave: (event) => { stopMarquee(event); cancelHover() },
                   onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenId(workspace.workspaceId) } },
                 },
                 h(FolderGlyph, { kind: folderKind, label: folderKind === undefined ? undefined : labels[folderKind] }),
                 renaming
                   ? renameInput(rename)
-                  : h('span', { className: 'dfs-title' }, name === '' ? t('section.title') : name),
+                  : h(Title, { text: name === '' ? t('section.title') : name }),
                 h('span', { className: `dfs-rowActions${menuFor !== null && menuFor.key === menuKey ? ' is-open' : ''}` },
                   menuTrigger(menuKey, folderMenu)),
                 rows.length > 0 ? h('span', { className: 'dfs-badge' }, String(rows.length)) : null,
@@ -1627,12 +1690,15 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
                   tabIndex: 0,
                   title: t('group.ungrouped'),
                   onClick: () => setOpenId(UNGROUPED),
-                  onMouseEnter: (event) => scheduleHover(menuKey, folderStatusRows(ungroupedWorkspace), event),
-                  onMouseLeave: cancelHover,
+                  onMouseEnter: (event) => {
+                    startMarquee(event)
+                    scheduleHover(menuKey, folderStatusRows(ungroupedWorkspace), event)
+                  },
+                  onMouseLeave: (event) => { stopMarquee(event); cancelHover() },
                   onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenId(UNGROUPED) } },
                 },
                 h(FolderGlyph, { kind: folderKindOf(ungroupedWorkspace), label: undefined }),
-                h('span', { className: 'dfs-title' }, t('group.ungrouped')),
+                h(Title, { text: t('group.ungrouped') }),
                 h('span', { className: 'dfs-badge' }, String(ungroupedRows.length)),
                 h(ChevronIcon, null))))
             }
@@ -1662,6 +1728,8 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             role: 'button',
             tabIndex: 0,
             title: t('action.back'),
+            onMouseEnter: startMarquee,
+            onMouseLeave: stopMarquee,
             onClick: () => { setOpenId(null); setQuery('') },
             onKeyDown: (event) => {
               if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenId(null); setQuery('') }
@@ -1671,7 +1739,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           h(FolderIcon, null),
           workspaceRenaming
             ? renameInput(rename)
-            : h('span', { className: 'dfs-crumbName', title: name }, name),
+            : h(Title, { className: 'dfs-crumbName', text: name }),
           isUngrouped ? null : h('button', {
             key: 'new',
             type: 'button', className: 'dfs-iconBtn', title: t('action.newSession'),
@@ -1715,12 +1783,15 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
                 title: isArchived ? t('notice.archivedNotOpenable') : (kind === undefined ? titleOf(summary) : `${titleOf(summary)} — ${label}`),
                 onClick: () => { if (!renaming) openRow() },
                 onContextMenu: contextMenuHandler(menuKey, sessionMenu),
-                onMouseEnter: (event) => scheduleHover(menuKey, statusRowsOf(status, projectionOf(summary.id), summary.updatedAt), event),
-                onMouseLeave: cancelHover,
+                onMouseEnter: (event) => {
+                  startMarquee(event)
+                  scheduleHover(menuKey, statusRowsOf(status, projectionOf(summary.id), summary.updatedAt), event)
+                },
+                onMouseLeave: (event) => { stopMarquee(event); cancelHover() },
                 onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openRow() } },
               },
               h(Indicator, { kind, title: label }),
-              renaming ? renameInput(rename) : h('span', { className: 'dfs-title' }, titleOf(summary)),
+              renaming ? renameInput(rename) : h(Title, { text: titleOf(summary) }),
               isPinned ? h('span', { className: 'dfs-pin', title: t('action.pin'), 'aria-hidden': true }, h(PinIcon)) : null,
               h('span', { className: `dfs-rowActions${menuFor !== null && menuFor.key === menuKey ? ' is-open' : ''}` },
                 menuTrigger(menuKey, sessionMenu)),
@@ -1761,6 +1832,6 @@ if (typeof module === 'object' && module !== null && module.exports !== undefine
     directionSign, normalizeSort, readSortState, writeSortState,
     readArchivedFilter, writeArchivedFilter,
     sortWorkspaces, sortSessions, pickFolderKind, indicatorOf,
-    relativeTime, baseName,
+    relativeTime, baseName, marqueeShiftOf, marqueeDurationOf,
   }
 }

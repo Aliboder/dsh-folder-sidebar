@@ -1,6 +1,6 @@
 {
   "name": "dsh-folder-sidebar",
-  "version": "0.17.1",
+  "version": "0.18.0",
   "type": "module",
   "description": "Folder-style sidebar for DeepSeek Harness: workspaces read as folders, and clicking one enters its session list instead of scrolling every workspace at once. · DSH 文件夹侧栏：工作区即文件夹，点进去只看该工作区的会话。",
   "license": "MIT",

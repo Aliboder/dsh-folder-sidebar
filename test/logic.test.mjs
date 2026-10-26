@@ -137,6 +137,16 @@ assert.equal(L.relativeTime(now - 3 * 3_600_000, now), '3h')
 assert.equal(L.relativeTime(now - 4 * 86_400_000, now), '4d')
 assert.equal(L.relativeTime(now - 30 * 86_400_000, now), '12/11')
 
+// --- long-title marquee ---
+assert.equal(L.marqueeShiftOf(100, 100), 0, 'a fitting title never scrolls')
+assert.equal(L.marqueeShiftOf(102, 100), 0, 'a two-pixel rounding gap stays still')
+assert.equal(L.marqueeShiftOf(180, 100), 80)
+assert.equal(L.marqueeShiftOf(Number.NaN, 100), 0)
+assert.equal(L.marqueeDurationOf(80), 2200, 'short overflow uses the floor')
+assert.equal(L.marqueeDurationOf(200), 5200)
+assert.equal(L.marqueeDurationOf(10000), 14000, 'very long titles cap the duration')
+assert.ok(L.marqueeDurationOf(2000) > L.marqueeDurationOf(200), 'longer text scrolls slower')
+
 // --- paths ---
 assert.equal(L.baseName('D:\\work\\project'), 'project')
 assert.equal(L.baseName('/home/me/repo/'), 'repo')
