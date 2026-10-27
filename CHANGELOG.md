@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.18.3
+
+- 修复长时间运行后侧栏变成「Minified React error #300」：`useWorkspaces` / `useSessions` / `useSessionStatus` 这 6 个 slot hook 原先按 `typeof … === 'function'` 条件调用，宿主重连或状态切换时 props 短暂缺失会改变 hook 数量。现在外层组件不调用任何 hook，只在三个 hook 都存在时挂载内层组件。
+- 新增回归测试：源码中不允许出现条件调用 slot hook 的写法，且外层组件内不得出现 hook 调用；发布脚本改为提交工作树全部改动，避免 tag 与打包内容不一致。
+
+## 0.18.2
+
+- 该版本**不包含**上述修复：发布脚本当时只提交了 `package.json`，CI 从 tag 检出的代码里没有 `client.js` 改动。请直接升级到 0.18.3。
+
 ## 0.18.0
 
 - 长名称不再只能看省略号：悬停行（会话、文件夹、未分组、搜索结果、面包屑文件夹名）时，放不下的标题会缓慢横向滚到末尾再回来；不溢出的标题完全不动，`prefers-reduced-motion` 下不滚动。

@@ -111,6 +111,7 @@ npm install dsh-folder-sidebar
 - `plugin_manager` 的 `install_bundle` 指向本目录。
 - **Client 改动**（`client.js`、locale）：刷新页面。
 - **Host 改动**（`index.js`——状态色投影）：需要**完整重启 DSH**。
+- **启用/停用插件行**属于 bundle 组合变更：保存后浏览器侧要刷新页面才会挂载/卸载座位；只有在本机同时跑 `pnpm run dev:web` 时才有免刷新热更。
 
 仓库：<https://github.com/Aliboder/dsh-folder-sidebar> · 包：<https://www.npmjs.com/package/dsh-folder-sidebar>
 

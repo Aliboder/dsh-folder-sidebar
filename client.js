@@ -755,7 +755,25 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           }, h('span', { className: 'dfs-folderGlyph' }, h(FolderIcon, { color })))
         }
 
+        /**
+         * The slot can render us while the Host is reconnecting, and for a few
+         * frames `useWorkspaces` / `useSessions` / `useSessionStatus` are not
+         * passed. Calling them conditionally changes the hook count between
+         * renders, which React reports as error #300 (rendered more hooks than
+         * during the previous render), so this outer component calls no hooks
+         * at all and only mounts the connected body once all three exist.
+         */
         function FolderSidebar(props) {
+          const hooksReady = typeof props.useWorkspaces === 'function'
+            && typeof props.useSessions === 'function'
+            && typeof props.useSessionStatus === 'function'
+          if (!hooksReady) {
+            return h('div', { className: 'dfs-root', 'aria-busy': 'true' })
+          }
+          return h(FolderSidebarConnected, props)
+        }
+
+        function FolderSidebarConnected(props) {
           const wide = props.wide !== false
           const expandSidebar = props.expandSidebar
           const useWorkspaces = props.useWorkspaces
@@ -779,12 +797,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           const folderSort = sortState.folders
           const sessionSort = sortState.sessions
 
-          const workspaceItems = typeof useWorkspaces === 'function' ? useWorkspaces((state) => state.items) : undefined
-          const archivedIds = typeof useWorkspaces === 'function' ? useWorkspaces((state) => state.archivedSessionIds) : undefined
-          const pinnedIds = typeof useWorkspaces === 'function' ? useWorkspaces((state) => state.pinnedSessionIds) : undefined
-          const list = typeof useSessions === 'function' ? useSessions((state) => state) : undefined
-          const projections = typeof useSessions === 'function' ? useSessions((state) => state.projectionsBySession) : undefined
-          const statusMap = typeof useSessionStatus === 'function' ? useSessionStatus((state) => state) : undefined
+          const workspaceItems = useWorkspaces((state) => state.items)
+          const archivedIds = useWorkspaces((state) => state.archivedSessionIds)
+          const pinnedIds = useWorkspaces((state) => state.pinnedSessionIds)
+          const list = useSessions((state) => state)
+          const projections = useSessions((state) => state.projectionsBySession)
+          const statusMap = useSessionStatus((state) => state)
 
           const workspaces = Array.isArray(workspaceItems) ? workspaceItems : []
           const archived = React.useMemo(() => new Set(archivedIds ?? []), [archivedIds])
