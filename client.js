@@ -1403,6 +1403,13 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             onClick: (event) => toggleMenuAt(key, items, event),
           }, DotsIcon())
 
+          React.useEffect(() => {
+            if (!searchOpen) return undefined
+            const node = searchInput.current
+            if (node !== null && typeof node.focus === 'function') node.focus()
+            return undefined
+          }, [searchOpen])
+
           if (!wide) {
             return h('div', { className: 'dfs-rail' },
               h('button', {
@@ -1510,13 +1517,6 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             setSearchOpen(false)
             setQuery('')
           }
-
-          React.useEffect(() => {
-            if (!searchOpen) return undefined
-            const node = searchInput.current
-            if (node !== null && typeof node.focus === 'function') node.focus()
-            return undefined
-          }, [searchOpen])
 
           /** The fixed top bar: identical on both levels, a home for actions. */
           function mainHeader(key) {

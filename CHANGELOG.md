@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.18.4
+
+- 修复窄栏 / 手机端触发 **React error #310**：`if (!wide)` 的窄栏分支在「搜索框聚焦」的 `useEffect` 之前就提前返回，桌面宽栏与手机窄栏的 hook 数量因此不同，展开/收起侧栏就会报错。现在该 effect 在所有提前返回之前调用。
+- 新增回归测试：窄栏分支之后不允许出现任何 hook 调用（`test/smoke.test.mjs`）。
+- 0.18.3 修的是另一条：#300（slot hook 被条件调用）。
+
 ## 0.18.3
 
 - 修复长时间运行后侧栏变成「Minified React error #300」：`useWorkspaces` / `useSessions` / `useSessionStatus` 这 6 个 slot hook 原先按 `typeof … === 'function'` 条件调用，宿主重连或状态切换时 props 短暂缺失会改变 hook 数量。现在外层组件不调用任何 hook，只在三个 hook 都存在时挂载内层组件。

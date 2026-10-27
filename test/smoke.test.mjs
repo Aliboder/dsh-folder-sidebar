@@ -43,6 +43,22 @@ assert.ok(
   'the connected component must call the slot hooks unconditionally',
 )
 
+// The narrow layout ("rail") returns early; a hook after that return makes the
+// count differ between wide and narrow renders (mobile expand/collapse), which
+// React reports as error #310.
+const lines = client.split('\n')
+const narrowLine = lines.findIndex((line) => line.trim().startsWith('if (!wide) {'))
+assert.ok(narrowLine > 0, 'the narrow-layout branch must exist')
+const lateHooks = lines
+  .map((line, index) => ({ line, index }))
+  .filter(({ line }) => /^\s+(React\.use[A-Za-z]+\(|useWorkspaces\(|useSessions\(|useSessionStatus\()/.test(line))
+  .filter(({ index }) => index > narrowLine)
+assert.deepEqual(
+  lateHooks.map(({ index }) => index + 1),
+  [],
+  'no hook may be called after the narrow-layout early return',
+)
+
 // Display metadata is what the Plugin Manager and Settings list show.
 for (const [locale, dict] of [['zh', zh], ['en', en]]) {
   assert.equal(typeof dict.meta?.title, 'string', `${locale}: meta.title is required`)
