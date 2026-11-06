@@ -9,6 +9,9 @@
 
 const INDICATOR_PRIORITY = ['waiting', 'running', 'error', 'completed', 'stopped']
 
+/** A Workspace cell ignores user stops: stopping is a Session-level fact. */
+const FOLDER_INDICATOR_PRIORITY = INDICATOR_PRIORITY.filter((kind) => kind !== 'stopped')
+
 const INDICATOR_LABEL_KEY = {
   running: 'status.running',
   completed: 'status.completed',
@@ -102,6 +105,43 @@ function writeArchivedFilter(value, storage) {
   }
 }
 
+/** Last-read failure per Session: a red cell clears once its turn was seen. */
+const SEEN_KEY = 'dsh.folder-sidebar.seen'
+
+function readSeenTurns(storage) {
+  try {
+    const parsed = JSON.parse(safeStorage(storage)?.getItem(SEEN_KEY) ?? 'null')
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    const seen = {}
+    for (const [id, turn] of Object.entries(parsed)) {
+      if (id !== '' && typeof turn === 'number' && Number.isFinite(turn) && turn >= 0) seen[id] = turn
+    }
+    return seen
+  } catch {
+    return {}
+  }
+}
+
+function writeSeenTurns(seen, storage) {
+  try {
+    safeStorage(storage)?.setItem(SEEN_KEY, JSON.stringify(seen))
+  } catch {
+    // Storage may be unavailable; the marker still clears for this session.
+  }
+}
+
+/** Record a read turn; the map stays bounded by dropping the oldest entries. */
+function markTurnSeen(seen, sessionId, turn) {
+  if (typeof sessionId !== 'string' || sessionId === '') return seen
+  if (typeof turn !== 'number' || !Number.isFinite(turn) || turn < 0) return seen
+  const previous = seen[sessionId]
+  if (typeof previous === 'number' && previous >= turn) return seen
+  const next = { ...seen, [sessionId]: turn }
+  const ids = Object.keys(next)
+  for (const id of ids.slice(0, Math.max(0, ids.length - 500))) delete next[id]
+  return next
+}
+
 /**
  * Order Workspaces for the folder list.
  * @param items - Workspaces in Host order.
@@ -150,13 +190,14 @@ function sortSessions(rows, sort, accessors) {
 
 /**
  * A Workspace shows one status: highest precedence first, then the state that
- * began earliest.
+ * began earliest. A user stop is a Session-level fact and never marks the
+ * folder, so `stopped` candidates are ignored.
  * @param candidates - `{ kind, since }` pairs for the Workspace's Sessions.
  */
 function pickFolderKind(candidates) {
   let best
   for (const candidate of candidates) {
-    const priority = INDICATOR_PRIORITY.indexOf(candidate.kind)
+    const priority = FOLDER_INDICATOR_PRIORITY.indexOf(candidate.kind)
     if (priority < 0) continue
     if (best === undefined || priority < best.priority || (priority === best.priority && candidate.since < best.since)) {
       best = { kind: candidate.kind, priority, since: candidate.since }
@@ -166,18 +207,31 @@ function pickFolderKind(candidates) {
 }
 
 /**
- * One row's leading indicator. Green follows the client's completion-unread
- * rule; failure comes from this bundle's projection and is not cleared by
- * viewing. Running wins over everything, a pending question wins over activity.
+ * Whether this projection's failure has already been read. Reading means the
+ * Session was the one in the main view — the same rule the client uses to
+ * clear `completionUnread` — recorded per turn, so a later failure shows again.
  */
-function indicatorOf(status, projection) {
+function failureSeen(projection, seenTurn) {
+  if (projection === undefined || projection === null) return false
+  if (projection.state !== 'failed' && projection.state !== 'interrupted') return false
+  const turn = typeof projection.turn === 'number' ? projection.turn : 0
+  return typeof seenTurn === 'number' && Number.isFinite(seenTurn) && seenTurn >= turn
+}
+
+/**
+ * One row's leading indicator. Green follows the client's completion-unread
+ * rule; a red failure comes from this bundle's projection and clears once the
+ * Session was read, just like the green completion. Running wins over
+ * everything, a pending question wins over activity.
+ */
+function indicatorOf(status, projection, seenTurn) {
   const waiting = status !== undefined && status !== null
     && status.pendingInteraction !== undefined && status.pendingInteraction !== null
   if (waiting) return 'waiting'
   const running = status !== undefined && status !== null && status.running === true
   if (running) return 'running'
   const state = projection === undefined || projection === null ? undefined : projection.state
-  if (state === 'failed' || state === 'interrupted') return 'error'
+  if (state === 'failed' || state === 'interrupted') return failureSeen(projection, seenTurn) ? undefined : 'error'
   if (status !== undefined && status !== null && status.completionUnread === true) return 'completed'
   if (state === 'running') return 'running'
   if (state === 'stopped') return 'stopped'
@@ -786,6 +840,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           const [rename, setRename] = React.useState(null)
           const [confirm, setConfirm] = React.useState(null)
           const [archivedFilter, setArchivedFilter] = React.useState(() => readArchivedFilter())
+          const [seenTurns, setSeenTurns] = React.useState(() => readSeenTurns())
           const [notice, setNotice] = React.useState(null)
           const [contentHits, setContentHits] = React.useState([])
           const [searching, setSearching] = React.useState(false)
@@ -829,6 +884,25 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
             }
             return undefined
           }, [list])
+
+          /**
+           * Reading a failed/interrupted Session clears its red cell, matching
+           * the completion-unread rule: once it is the main view it has been
+           * seen. The read turn is stored, so the next failure lights up again.
+           */
+          React.useEffect(() => {
+            if (currentId === undefined) return
+            const projection = projectionOf(currentId)
+            if (projection === undefined || projection === null) return
+            if (projection.state !== 'failed' && projection.state !== 'interrupted') return
+            const turn = typeof projection.turn === 'number' ? projection.turn : 0
+            setSeenTurns((previous) => {
+              const next = markTurnSeen(previous, currentId, turn)
+              if (next === previous) return previous
+              writeSeenTurns(next)
+              return next
+            })
+          }, [currentId, projectionOf])
 
           const currentWorkspaceId = React.useMemo(() => {
             if (currentId === undefined) return undefined
@@ -1058,7 +1132,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           const folderKindOf = React.useCallback((workspace) => {
             const candidates = []
             for (const summary of rowsFor(workspace)) {
-              const kind = indicatorOf(statusOf(summary.id), projectionOf(summary.id))
+              const kind = indicatorOf(statusOf(summary.id), projectionOf(summary.id), seenTurns[summary.id])
               if (kind === undefined) continue
               const projection = projectionOf(summary.id)
               const since = projection !== undefined && projection !== null
@@ -1068,7 +1142,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
               candidates.push({ kind, since })
             }
             return pickFolderKind(candidates)
-          }, [rowsFor, statusOf, projectionOf])
+          }, [rowsFor, statusOf, projectionOf, seenTurns])
 
           const labels = {}
           for (const kind of INDICATOR_PRIORITY) labels[kind] = t(INDICATOR_LABEL_KEY[kind])
@@ -1085,7 +1159,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           }
 
           /** Every status one Session carries, for the hover card. */
-          const statusRowsOf = (status, projection, updatedAt) => {
+          const statusRowsOf = (status, projection, updatedAt, seenTurn) => {
             const rows = []
             if (status !== undefined && status !== null
               && status.pendingInteraction !== undefined && status.pendingInteraction !== null) {
@@ -1095,7 +1169,9 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
               rows.push({ key: 'running', kind: 'running', label: labels.running })
             }
             const state = projection === undefined || projection === null ? undefined : projection.state
-            if (state === 'failed' || state === 'interrupted') rows.push({ key: 'error', kind: 'error', label: labels.error })
+            if ((state === 'failed' || state === 'interrupted') && !failureSeen(projection, seenTurn)) {
+              rows.push({ key: 'error', kind: 'error', label: labels.error })
+            }
             if (status !== undefined && status !== null && status.completionUnread === true) {
               rows.push({ key: 'completed', kind: 'completed', label: labels.completed })
             }
@@ -1109,12 +1185,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           const folderStatusRows = (workspace) => {
             const counts = new Map()
             for (const summary of rowsFor(workspace)) {
-              const kind = indicatorOf(statusOf(summary.id), projectionOf(summary.id))
+              const kind = indicatorOf(statusOf(summary.id), projectionOf(summary.id), seenTurns[summary.id])
               if (kind === undefined) continue
               counts.set(kind, (counts.get(kind) ?? 0) + 1)
             }
             const rows = []
-            for (const kind of INDICATOR_PRIORITY) {
+            for (const kind of FOLDER_INDICATOR_PRIORITY) {
               const count = counts.get(kind)
               if (count === undefined) continue
               rows.push({ key: kind, kind, label: `${labels[kind]} ×${count}` })
@@ -1769,7 +1845,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
           const sessionRows = []
           for (const summary of rows) {
             const status = statusOf(summary.id)
-            const kind = indicatorOf(status, projectionOf(summary.id))
+            const kind = indicatorOf(status, projectionOf(summary.id), seenTurns[summary.id])
             const label = kind === undefined ? undefined : (kind === 'waiting' ? waitingLabel(status) : labels[kind])
             const menuKey = `session:${summary.id}`
             const renaming = rename !== null && rename.kind === 'session' && rename.id === summary.id
@@ -1803,7 +1879,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
                 onContextMenu: contextMenuHandler(menuKey, sessionMenu),
                 onMouseEnter: (event) => {
                   startMarquee(event)
-                  scheduleHover(menuKey, statusRowsOf(status, projectionOf(summary.id), summary.updatedAt), event)
+                  scheduleHover(menuKey, statusRowsOf(status, projectionOf(summary.id), summary.updatedAt, seenTurns[summary.id]), event)
                 },
                 onMouseLeave: (event) => { stopMarquee(event); cancelHover() },
                 onKeyDown: (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openRow() } },
@@ -1844,11 +1920,12 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
 
 if (typeof module === 'object' && module !== null && module.exports !== undefined) {
   module.exports = {
-    INDICATOR_PRIORITY, INDICATOR_LABEL_KEY, GLYPH_COLOR,
+    INDICATOR_PRIORITY, FOLDER_INDICATOR_PRIORITY, INDICATOR_LABEL_KEY, GLYPH_COLOR,
     SORT_MODES, SORT_DIRS, SORT_DEFAULT, SORT_NATURAL_DIR,
     ARCHIVED_FILTERS, UNGROUPED,
     directionSign, normalizeSort, readSortState, writeSortState,
     readArchivedFilter, writeArchivedFilter,
+    SEEN_KEY, readSeenTurns, writeSeenTurns, markTurnSeen, failureSeen,
     sortWorkspaces, sortSessions, pickFolderKind, indicatorOf,
     relativeTime, baseName, marqueeShiftOf, marqueeDurationOf,
   }

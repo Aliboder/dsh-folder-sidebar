@@ -111,6 +111,13 @@ assert.equal(
   'same kind keeps the oldest timestamp',
 )
 assert.equal(L.pickFolderKind([{ kind: 'nonsense', since: 1 }]), undefined, 'unknown kinds are ignored')
+assert.equal(L.pickFolderKind([{ kind: 'stopped', since: 1 }]), undefined, 'a user stop does not mark a folder')
+assert.equal(
+  L.pickFolderKind([{ kind: 'stopped', since: 1 }, { kind: 'completed', since: 9 }]),
+  'completed',
+  'a user stop does not outrank a real state',
+)
+assert.deepEqual(L.FOLDER_INDICATOR_PRIORITY, ['waiting', 'running', 'error', 'completed'], 'folders never show stopped')
 
 // --- session indicator precedence ---
 const running = { running: true, completionUnread: false }
@@ -127,6 +134,33 @@ assert.equal(L.indicatorOf(idle, projection('interrupted')), 'error')
 assert.equal(L.indicatorOf(unread, projection('completed')), 'completed')
 assert.equal(L.indicatorOf(idle, projection('stopped')), 'stopped')
 assert.equal(L.indicatorOf(idle, projection('idle')), undefined)
+
+// --- reading a failure clears its red cell (per turn) ---
+assert.equal(L.indicatorOf(idle, projection('failed'), 1), undefined, 'a seen failure clears')
+assert.equal(L.indicatorOf(idle, projection('interrupted'), 1), undefined, 'a seen interruption clears')
+assert.equal(L.indicatorOf(idle, { state: 'failed', since: 0, turn: 2 }, 1), 'error', 'a later failure lights up again')
+assert.equal(L.indicatorOf(waiting, projection('failed'), 1), 'waiting', 'waiting still wins over a seen failure')
+assert.equal(L.indicatorOf(running, projection('failed'), 1), 'running', 'running still wins over a seen failure')
+assert.equal(L.failureSeen(projection('completed'), 5), false, 'only failures can be seen')
+assert.equal(L.failureSeen(projection('failed'), undefined), false)
+assert.equal(L.failureSeen(projection('failed'), 1), true)
+
+// --- read markers persist per Session and stay bounded ---
+assert.deepEqual(L.readSeenTurns(fakeStorage()), {})
+assert.deepEqual(L.readSeenTurns(fakeStorage({ 'dsh.folder-sidebar.seen': 'not json' })), {})
+const seenStore = fakeStorage({ 'dsh.folder-sidebar.seen': JSON.stringify({ s1: 3, bad: 'x' }) })
+assert.deepEqual(L.readSeenTurns(seenStore), { s1: 3 }, 'invalid entries are dropped')
+const onceSeen = L.markTurnSeen({}, 's1', 2)
+assert.deepEqual(onceSeen, { s1: 2 })
+assert.equal(L.markTurnSeen(onceSeen, 's1', 1), onceSeen, 'an older turn never moves the marker back')
+assert.deepEqual(L.markTurnSeen(onceSeen, 's2', 0), { s1: 2, s2: 0 })
+L.writeSeenTurns(onceSeen, seenStore)
+assert.deepEqual(JSON.parse(seenStore.dump()['dsh.folder-sidebar.seen']), { s1: 2 })
+let manySeen = {}
+for (let i = 0; i < 510; i += 1) manySeen = L.markTurnSeen(manySeen, `s${i}`, 1)
+assert.equal(Object.keys(manySeen).length, 500, 'the read map stays bounded')
+assert.equal(manySeen.s0, undefined, 'the oldest entries fall out first')
+assert.equal(manySeen.s509, 1)
 
 // --- relative time ---
 const now = Date.UTC(2026, 0, 10, 12, 0, 0)
