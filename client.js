@@ -596,7 +596,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
 @media (hover:hover){.dfs-crumb:hover{background-color:var(--dsw-alias-interactive-bg-hover)}}
 .dfs-crumbChevron{flex:none;display:inline-flex;align-items:center;color:var(--dsw-alias-label-caption)}
 .dfs-crumbFolder{flex:none;display:inline-flex;align-items:center;color:var(--dsw-alias-label-tertiary)}
-.dfs-crumbName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px;font-weight:500}
+.dfs-crumbName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:20px}
 
 /* ---- search results: shipped searchResultRow ---- */
 .dfs-searchRow{display:flex;flex-direction:column;align-items:stretch;width:100%;min-height:48px;box-sizing:border-box;border:none;border-radius:var(--dsw-radius-lg);padding:4px calc(var(--dsh-sidebar-row-padding,12px) - var(--dsh-sidebar-paint-inset,3px));border-inline:var(--dsh-sidebar-paint-inset,3px) solid transparent;background:transparent;background-clip:padding-box;cursor:pointer;text-align:left;color:var(--dsw-alias-label-primary)}
@@ -1457,7 +1457,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
          */
         function FolderSidebar(props) {
           if (galleryRequested()) {
-            return h(GalleryPage, {
+            return h('div', { className: 'dfs-root', 'data-dfs-gallery': '1' }, h('style', null, CSS), h(GalleryPage, {
               t,
               sampleFolder: gallerySampleFolder,
               sampleSession: gallerySampleSession,
@@ -1468,7 +1468,7 @@ if (typeof window !== 'undefined' && window.__ModuleLoader__ !== undefined) {
                 if (url.hash.indexOf('folder-sidebar=gallery') !== -1) url.hash = ''
                 window.location.href = url.toString()
               },
-            })
+            }))
           }
           const hooksReady = typeof props.useWorkspaces === 'function'
             && typeof props.useSessions === 'function'

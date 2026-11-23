@@ -595,6 +595,10 @@ function mount(hostKit) {
   active = new Runtime()
   const root = active.renderRoot(registered.component, makeProps(makeStores()))
   assert.ok(hasClass(root, 'dfs-gallery'), 'gallery: ?folder-sidebar=gallery renders the test page')
+  assert.ok(
+    texts(root).some((text) => text.includes('.dfs-gallery{')),
+    'gallery: the test page ships the same stylesheet as the sidebar',
+  )
   const cases = byClass(root, 'dfs-galleryCase')
   assert.ok(cases.length >= 8, 'gallery: every adapter has a case')
   const adapters = texts(root).filter((text) => /^(IconButton|Button|KitStateDot|Title|KitMenu|KitHoverCard|KitToast|KitModal)$/.test(text))
