@@ -59,6 +59,33 @@ assert.deepEqual(
   'no hook may be called after the narrow-layout early return',
 )
 
+// --- UI layer rules (组件开发规范 08-验收清单) -----------------------------
+// One host-kit entry: the whole plugin resolves primitives through hostComponent.
+assert.equal(
+  (client.match(/require\('@deepseek-ai\/dsh-client-ui-primitives'\)/g) ?? []).length,
+  1,
+  'the host primitives package must be required exactly once',
+)
+// Colors only through --dsw-* tokens; hairlines are .5px like the host.
+assert.ok(!/#[0-9a-fA-F]{6}\b/.test(client), 'no hardcoded 6-digit hex colors')
+assert.ok(!/rgba?\(/.test(client), 'no rgb()/rgba() colors')
+assert.ok(!/:\s*1px solid/.test(client), 'hairlines must be .5px, not 1px')
+// Host-first: every overlay control must try the shipped primitive first.
+for (const name of ['Button', 'Tooltip', 'Menu', 'StateDot', 'HoverCard', 'MarqueeText', 'useHoverMarquee', 'Toast', 'Modal']) {
+  assert.ok(
+    client.includes(`hostComponent('${name}')`),
+    `the UI must resolve the host ${name} through hostComponent`,
+  )
+}
+// The component test page is the single standard; business code uses adapters.
+assert.ok(client.includes('function GalleryPage'), 'the component test page must exist')
+assert.ok(client.includes("'folder-sidebar=gallery'"), 'the gallery URL marker must exist')
+assert.ok(client.includes('function KitStateDot(props)'), 'KitStateDot adapter must exist')
+assert.ok(client.includes('function KitMenu(props)'), 'KitMenu adapter must exist')
+assert.ok(client.includes('function KitHoverCard(props)'), 'KitHoverCard adapter must exist')
+assert.ok(client.includes('function KitModal(props)'), 'KitModal adapter must exist')
+assert.ok(client.includes('function KitToast(props)'), 'KitToast adapter must exist')
+
 // Display metadata is what the Plugin Manager and Settings list show.
 for (const [locale, dict] of [['zh', zh], ['en', en]]) {
   assert.equal(typeof dict.meta?.title, 'string', `${locale}: meta.title is required`)

@@ -21,4 +21,4 @@ jobs:
       - name: Syntax check
         run: node --check index.js && node --check client.js
       - name: Tests
-        run: node test/smoke.test.mjs && node test/projection.test.mjs && node test/logic.test.mjs
+        run: node test/smoke.test.mjs && node test/projection.test.mjs && node test/logic.test.mjs && node test/render.test.mjs
