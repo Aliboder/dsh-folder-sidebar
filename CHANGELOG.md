@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.19.0
+
+界面按官方 DSH 组件规范重做：控件优先渲染宿主原语，行 / 顶栏 / 搜索照搬官方 `ui-workspace` 的几何与 token。
+
+- **宿主优先**：`client.js` 只有一个 `require('@deepseek-ai/dsh-client-ui-primitives')` 入口；菜单、悬浮卡、状态点、对话框、Toast、按钮、跑马灯全部优先渲染宿主组件，包不可用时用同几何、同 token 的本地 fallback。
+- **状态位改用官方 `StateDot`**：运行中 14px 转圈，等待 / 完成 / 失败 / 空闲 10px 圆点；文件夹图标按聚合状态着色，运行中直接换成转圈。放弃自绘的 18px 符号。
+- **顶栏与搜索照搬官方 `sectionHeader`**：36px 高、28px 图标按钮、内联搜索展开动画、点外部关闭；搜索结果改成官方两行 `searchResultRow`。
+- **行几何照搬官方 `Rows.module.css`**：32px 行、`--dsh-sidebar-*` 内衬、`--dsw-radius-md`、悬停才出现的 24px 行内操作、悬停时文件夹图标换成进入箭头、拖拽使用官方插入标记。
+- **菜单 / 对话框 / 提示换成宿主组件**：行菜单与视图选项使用宿主 `Menu`（右键通过 `anchorPoint` 在指针处打开）；重命名与二次确认使用宿主 `Modal` + 官方 44px 输入框；操作结果使用宿主 `Toast`。
+- **长标题使用宿主 `MarqueeText` + `useHoverMarquee`**；宿主缺失时仍用插件自己的位移 / 时长纯函数。
+- **新增组件测试页**：`?folder-sidebar=gallery`，顶部显示真实的 native / partial / fallback 状态，每个控件给出适配层名、实际控件与可复制调用。
+- **新增 render 测试**：自带 mini React 运行时，native 与 fallback 两条路径都渲染，覆盖进入文件夹、行菜单、重命名对话框、搜索、右键菜单与组件测试页。
+- 移除会话数徽标（官方工作区行已改成单行）；文件夹行悬停显示进入箭头。
+- `test/smoke.test.mjs` 增加界面规范检查：宿主入口唯一、无硬编码颜色、发丝线 `.5px`、适配层与测试页必须存在。
+
 ## 0.18.5
 
 - 失败 / 中断的红 `!` 现在**读过就清除**，与绿 `✓`（未读完成）一致：会话成为主视图（`retainedBy.mainView > 0`）即视为读过，不再一直红着。已读按「会话 + 轮次」记在浏览器本地（`dsh.folder-sidebar.seen`），刷新不复活；同一会话下一次失败（`turn` 更大）会重新点亮。

@@ -33,13 +33,14 @@
 ## 命令
 
 ```bash
-npm test                      # smoke + projection + logic 三份 Node 测试
+npm test                      # smoke + projection + logic + render 四份 Node 测试
 npm run check                 # node --check index.js client.js
 npm run pack:check            # npm pack --dry-run，核对 files 清单与产物
 
 node test/smoke.test.mjs      # 清单 / 注册 / hook 规则 / UI 规范静态检查
 node test/projection.test.mjs # 投影状态机
 node test/logic.test.mjs      # 纯函数（排序、状态优先级、聚合、时间、路径、跑马灯）
+node test/render.test.mjs     # native / fallback 两条渲染路径（自带 mini React）
 ```
 
 装进 DSH 验证：
@@ -61,7 +62,7 @@ cordis.patch.yml          DSH bundle patch：插入 folder-sidebar 行
 client.js                 Client 全部界面（单文件、无构建，直接发布）
 locale/zh.json · en.json  插件列表标题与简介
 icon.svg                  插件图标
-test/                     smoke（清单与 UI 规范）、projection（投影状态机）、logic（纯函数）
+test/                     smoke（清单与 UI 规范）、projection（投影状态机）、logic（纯函数）、render（两条渲染路径）
 ```
 
 Client 内部分区：
@@ -70,7 +71,7 @@ Client 内部分区：
 client.js
 ├─ 纯逻辑           模块顶层，无 React/DOM，末尾导出给 Node 测试
 └─ ModuleLoader      factory 内：
-   ├─ host-ui        唯一 require 宿主原语 + hostComponent / hostIcon / hostKitState
+   ├─ host-ui        唯一 require 宿主原语 + hostComponent / icon / hostKitState
    ├─ adapters       IconButton / KitStateDot / KitMenu / KitHoverCard / KitModal / KitToast / Title
    ├─ gallery        组件测试页（?folder-sidebar=gallery）
    ├─ components     FolderRow / SessionRow / SearchResult / TopBar（官方 sectionHeader 复刻）
